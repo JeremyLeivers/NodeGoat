@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nodegoat-service-account
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nodegoat-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: nodegoat-service-account
+    namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodegoat
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 4000
+  selector:
+    app: nodegoat
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodegoat-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nodegoat
+  template:
+    metadata:
+      labels:
+        app: nodegoat
+    spec:
+      serviceAccountName: nodegoat-service-account
+      containers:
+        - name: nodegoat
+          image: jeremyleivers/nodegoat-app:latest
+          ports:
+            - containerPort: 4000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: MONGODB_URI
+              value: "mongodb://mongo:27017/nodegoat"
+          command: ["sh", "-c"]
+          args:
+            - |
+              until nc -z -w 2 mongo 27017 && echo 'mongo is ready for connections' && node artifacts/db-reset.js && npm start; do sleep 2; done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+spec:
+  ports:
+    - port: 27017
+  selector:
+    app: mongo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:4.4
+          securityContext:
+            runAsUser: 999
+          ports:
+            - containerPort: 27017

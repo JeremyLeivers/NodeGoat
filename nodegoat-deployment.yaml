@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodegoat
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 4000
+  selector:
+    app: nodegoat
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodegoat-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nodegoat
+  template:
+    metadata:
+      labels:
+        app: nodegoat
+    spec:
+      serviceAccountName: nodegoat-admin
+      containers:
+        - name: nodegoat
+          image: jeremyleivers/nodegoat-app:latest
+          ports:
+            - containerPort: 4000
+          env:
+            - name: NODE_ENV
+              value: "production" # Adjust as necessary
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-secret
+                  key: mongo-uri
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "Starting NodeGoat application..."
+              echo "Attempting to connect to MongoDB..."
+              count=0
+              while ! nc -z -w 2 mongo 27017; do
+                count=$((count + 1))
+                echo "Attempt $count: Waiting for MongoDB at mongo:27017..."
+                if [ $count -ge 10 ]; then
+                  echo "Failed to connect to MongoDB after $count attempts."
+                  exit 1
+                fi
+                sleep 2
+              done
+              echo "MongoDB is ready for connections."
+              echo "Resetting database..."
+              node artifacts/db-reset.js
+              echo "Starting Node.js application..."
+              npm start

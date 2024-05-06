@@ -1,0 +1,48 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: June
+  region: eu-west-2
+
+vpc:
+  subnets:
+    public: {}
+
+nodeGroups:
+  - name: June-P
+    instanceType: t3.medium
+    desiredCapacity: 3
+    privateNetworking: false
+    iam:
+      attachPolicyARNs: # ARNs of the policies you want to attach
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+      withAddonPolicies:
+        externalDNS: true
+        autoScaler: true
+        appMesh: true
+        ebs: true
+        fsx: true
+        efs: true
+        albIngress: true
+    ssh:
+      allow: true
+    labels:
+      alpha.eksctl.io/cluster-name: June
+    tags:
+      nodegroup-role: worker
+
+iam:
+  withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: aws-node
+        namespace: kube-system
+      wellKnownPolicies:
+        autoScaler: true
+
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["*"]
